@@ -104,6 +104,32 @@ mean converges in probability to the expected value).
 -   Plot the running average against the number of rolls and comment on
     the result.
 
+```{r}
+roll_die <- function(num_rolls=10000, num_sides=6) {
+  rolls <- sample(1:num_sides, size=num_rolls, replace=TRUE)
+  return (cumsum(rolls) / 1:num_rolls)
+}
+
+plot_rolls <- function(cum_means) {
+  if (!is.vector(cum_means)) {
+    cum_means <- t(cum_means)
+  }
+  matplot(cum_means, type="l",
+     main="LLN convergence",
+     xlab="number of rolls",
+     ylab="cumulative mean")
+}
+```
+
+```{r}
+n <- 10000
+k <- 6
+cum_mean <- roll_die(n, k)
+
+plot_rolls(cum_mean)
+abline(h=3.5, col = "red", lty=2) # lty 2 -> dashed
+```
+
 ## b.
 
 -   Replicate the die-rolling experiment $M=50$ times using a for loop.
@@ -113,14 +139,41 @@ mean converges in probability to the expected value).
 -   Plot all 50 paths on the same graph to observe the variation in the
     running averages.
 
+```{r}
+M <- 50
+histories <- matrix(NA, nrow = M, ncol = n)
+for (i in 1:M) {
+  histories[i,] <- roll_die(n, k)
+}
+plot_rolls(histories)
+abline(h=3.5, col = "red", lty=2) # lty 2 -> dashed
+```
+
 ## c.
 
 What is the theoretical expected value of a fair 6-sided die?
+
+$$E(X) = \sum_{k=1}^{n} k \cdot P(k)$$
+
+$$\forall k: P(k) = \frac{1}{n}$$
+
+therefore:
+
+$$
+E(X) = \frac{1}{n} \sum_{k=1}^{n} k
+$$ In this case, n=6
+
+```{r}
+mean(1:6)
+```
 
 ## d.
 
 Comment on how the running mean of the paths behaves relative to the
 expected value as $n$ increases.
+
+As n increases, the running means of all paths have less variance and
+converge to the expected value.
 
 ## e.
 
@@ -133,6 +186,28 @@ expected value as $n$ increases.
 
 -   How high is $n$ at the end of the loop?
 
+```{r}
+roll_until_convergence <- function(M = 50, epsilon = 0.01, target = 0.05, expected_value=3.5) {
+  n <- 0
+  means <- rep(0, M)
+  prop_outside <- 1
+  
+  while (prop_outside >= target) {
+    n <- n + 1
+    
+    rolls <- sample(1:6, M, replace = TRUE)
+    means <- ((n-1)*means + rolls) / n
+    
+    # mean of booleans (0,1) gives proportion
+    prop_outside <- mean(abs(means - expected_value) > epsilon)
+  }
+  
+  return(n)
+}
+n_convergence <- roll_until_convergence()
+print(n_convergence)
+```
+
 ## f.
 
 -   Repeat the analysis in b, but instead of simulating from a discrete
@@ -144,6 +219,21 @@ expected value as $n$ increases.
 -   Plot the running mean against increasing $n$. Comment on whether the
     weak Law of Large Numbers seems to hold for this distribution.
     Explain why or why not.
+
+```{r}
+histories_cauchy <- matrix(NA, nrow = M, ncol = n)
+for (i in 1:M) {
+  cauchy_samples <- rcauchy(n, location=0, scale=1)
+  histories_cauchy[i,] <- (cumsum(cauchy_samples) / 1:n)
+}
+matplot(t(histories_cauchy), type="l",
+     main="LLN convergence",
+     xlab="number of samples",
+     ylab="cumulative mean")
+```
+
+The LLN does not hold in this case because the Cauchy distribution does
+not have a finite mean.
 
 # 4. Central limit theorem (1.5 points)
 
@@ -162,10 +252,40 @@ $$ converges to the standard normal CDF as $n\rightarrow\infty$.
 Derive the expected value of the sample mean
 $\bar X_n=\frac{X_1+X_2+\ldots+X_n}{n}$.
 
+sample mean $$
+\bar X_n = \frac{1}{n}\sum_{i=1}^n X_i,
+$$ the expected value is: $$
+E(\bar X_n)
+= E\left(\frac{1}{n}\sum_{i=1}^n X_i\right)
+= \frac{1}{n}\sum_{i=1}^n E(X_i)
+= \frac{1}{n}\sum_{i=1}^n \mu
+= \mu
+$$
+
 ## b.
 
 Derive the variance of the sample mean
 $\bar X_n=\frac{X_1+X_2+\ldots+X_n}{n}$.
+
+variance of the sample mean (constant factor gets squared): $$
+\operatorname{Var}(\bar X_n)
+= \operatorname{Var}\left(\frac{1}{n}\sum_{i=1}^n X_i\right)
+= \frac{1}{n^2}\operatorname{Var}\left(\sum_{i=1}^n X_i\right)
+$$
+
+Since the $X_i$ are independent and identically distributed: $$
+\operatorname{Var}\left(\sum_{i=1}^n X_i\right)
+=\sum_{i=1}^n\operatorname{Var}(X_i)
+=n\operatorname{Var}(X)
+$$
+
+because of $\operatorname{Var}(X)=\sigma^2$: $$
+\operatorname{Var}\left(\sum_{i=1}^n X_i\right)
+=n\sigma^2
+$$ $$
+=> \operatorname{Var}(\bar X_n)=\frac{1}{n^2}\cdot
+n\sigma^2=\frac{\sigma^2}{n}
+$$
 
 ## c.
 
@@ -183,15 +303,52 @@ where $X_i$ is the random variable giving the number in roll $i$.
 -   Plot a histogram of the 100 sample means for each value of $n$.
     Observe the shape of the histograms.
 
+```{r}
+  ns <- c(100, 1000, 10000)
+  M <- 100
+  
+  par(mfrow = c(1,3))
+  
+  for (n in ns) {
+    sample_means <- numeric(M)
+    
+    for (i in 1:M) {
+      rolls <- sample(1:6, n, replace = TRUE)
+      sample_means[i] <- mean(rolls)
+    }
+    
+    hist(sample_means,
+         main=paste("n =", n),
+         xlab = "Sample mean",
+         breaks = M/5,
+         xlim = c(3,4)
+    )
+  }
+```
+
 -   Discuss how the distribution of the sample means changes as $n$
     increases. Comment on whether the histograms appear to approach a
     normal distribution as $n$, illustrating the Central Limit Theorem.
+
+    # TODO
 
 ## d.
 
 Compute expected value $\mu$ and the variance $\sigma^2$ for the random
 variable $X_i$ (giving the number in die-roll $i$), which follows a
 discrete uniform distribution.
+
+The expected value of a fair 6-sided die is 3.5 -\> (see 3c)
+
+The variance is: $$
+\operatorname{Var}(X_i)
+= E(X_i^2) - (E(X_i))^2
+$$ With $\frac{1}{6}\sum_{k=1}^{6}{k^2}=\frac{91}{6}$ we can insert the
+values and get: $$
+\operatorname{Var}(X_i)
+= \frac{91}{6} - 3.5^2
+= \frac{35}{12}
+$$
 
 ## e.
 
@@ -203,10 +360,40 @@ Now that you computed $\mu$ and $\sigma^2$, consider $Z_n$.
 
 -   Plot histograms of $Z_n$ for each combination of $n$ and $M$.
 
+```{r}
+ns <- c(100, 1000, 10000)
+Ms <- c(100, 1000, 10000)
+
+expected_value <- 3.5
+std <- sqrt(35/12)
+
+par(mfrow = c(length(ns), length(Ms)))
+
+for (n in ns) {
+  for (M in Ms) {
+    
+    Z <- numeric(M)
+    
+    for (i in 1:M) {
+      rolls <- sample(1:6, n, replace = TRUE)
+      sample_mean <- mean(rolls)
+      Z[i] <- (sample_mean - expected_value) / (std / sqrt(n))
+    }
+    
+    hist(Z,
+         main = paste("n =", n, ", M =", M),
+         xlab = "Z_n",
+         breaks = 20)
+  }
+}
+```
+
 -   Discuss how the distribution of $Z_n$ changes as $n$ and $M$
     increase. Comment on whether the distributions of $Z_n$ appear to
     approach a normal distribution, illustrating the Central Limit
     Theorem.
+
+    # TODO
 
 # 5. Readable and efficient code (1 points)
 
