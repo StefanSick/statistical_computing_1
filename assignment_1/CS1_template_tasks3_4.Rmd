@@ -227,9 +227,9 @@ for (i in 1:M) {
   histories_cauchy[i,] <- (cumsum(cauchy_samples) / 1:n)
 }
 matplot(t(histories_cauchy), type="l",
-     main="LLN convergence",
-     xlab="number of samples",
-     ylab="cumulative mean")
+        main="LLN convergence",
+        xlab="number of samples",
+        ylab="cumulative mean")
 ```
 
 The LLN does not hold in this case because the Cauchy distribution does
@@ -279,7 +279,7 @@ Since the $X_i$ are independent and identically distributed: $$
 =n\operatorname{Var}(X)
 $$
 
-because of $\operatorname{Var}(X)=\sigma^2$: $$
+because $\operatorname{Var}(X)=\sigma^2$: $$
 \operatorname{Var}\left(\sum_{i=1}^n X_i\right)
 =n\sigma^2
 $$ $$
@@ -304,33 +304,37 @@ where $X_i$ is the random variable giving the number in roll $i$.
     Observe the shape of the histograms.
 
 ```{r}
-  ns <- c(100, 1000, 10000)
-  M <- 100
+ns <- c(100, 1000, 10000)
+M <- 100
   
-  par(mfrow = c(1,3))
+par(mfrow = c(1,3))
   
-  for (n in ns) {
-    sample_means <- numeric(M)
+for (n in ns) {
+  sample_means <- numeric(M)
     
-    for (i in 1:M) {
-      rolls <- sample(1:6, n, replace = TRUE)
-      sample_means[i] <- mean(rolls)
-    }
-    
-    hist(sample_means,
-         main=paste("n =", n),
-         xlab = "Sample mean",
-         breaks = M/5,
-         xlim = c(3,4)
-    )
+  for (i in 1:M) {
+    rolls <- sample(1:6, n, replace = TRUE)
+    sample_means[i] <- mean(rolls)
   }
+    
+  hist(sample_means,
+       main=paste("n =", n),
+       xlab = "Sample mean",
+       breaks = M/5
+  )
+}
 ```
 
 -   Discuss how the distribution of the sample means changes as $n$
     increases. Comment on whether the histograms appear to approach a
     normal distribution as $n$, illustrating the Central Limit Theorem.
 
-    # TODO
+The sample mean is a sum of iid. random variables with mean and variance
+$\lt \infty$, so the distribution approaches a normal distribution.
+However, this isn't very visible here because the distribution of a fair
+die is already symmetric. Therefore, even for low n, the sample means
+appear approximately normal. What is also visible from the x-axis is the
+fact that the variance gets smaller with increasing n.
 
 ## d.
 
@@ -382,8 +386,7 @@ for (n in ns) {
     
     hist(Z,
          main = paste("n =", n, ", M =", M),
-         xlab = "Z_n",
-         breaks = 20)
+         xlab = "Z_n")
   }
 }
 ```
@@ -392,8 +395,8 @@ for (n in ns) {
     increase. Comment on whether the distributions of $Z_n$ appear to
     approach a normal distribution, illustrating the Central Limit
     Theorem.
-
-    # TODO
+    
+As M increases, the histograms become smoother and less noisy because more values are used to approximate the distribution of $Z_n$. As n increases, the distribution of $Z_n$ approaches the standard normal distribution according to the CLT. However, this is not very visible in these plots because the underlying distribution is symmetric and can only take on values in 1:6, so even for small n the approximation is already close to a standard normal distribution, which is visible if M is of sufficient size.
 
 # 5. Readable and efficient code (1 points)
 
