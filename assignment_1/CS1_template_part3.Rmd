@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 packages <- c("data.table", "collapse", "bench")
 
-install_if_missing <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
+install_if_missing <- packages[!(packages %in% installed.packages()[,"Package"])]
 if(length(install_if_missing)) install.packages(install_if_missing)
 
 library(data.table)
