@@ -408,7 +408,7 @@ x_vec <- c(1, 6, 2, 5, 11, 16, 12, 15, 21, 26, 22, 25)
 g_vec <- rep(c("grp1", "grp2", "grp3"), each = 4)
 
 kw_fast <- function(x, g){
-     if (length(x) != length(g) | length(x) == 0)
+     if (length(x) != length(g))
             stop("'x' and 'g' must have the same length")
     g <- factor(g)
     k <- nlevels(g)
