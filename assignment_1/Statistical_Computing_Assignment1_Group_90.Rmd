@@ -11,7 +11,7 @@ header-includes:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 ```{r, include=FALSE}
-packages <- c("data.table", "collapse", "matrixStats", "bench")
+packages <- c("data.table", "collapse", "matrixStats", "bench", "microbenchmark")
 
 install_if_missing <- packages[!(packages %in% installed.packages()[,"Package"])]
 if(length(install_if_missing)) install.packages(install_if_missing)
@@ -820,7 +820,7 @@ grp <- rep(1:3, c(20, 20, 10))
   
 ```{r}
 stats_kw <- apply(X, 1, function(row){stats:::kruskal.test.default(row, grp)$statistic})
-stats_kw
+head(stats_kw, 50)
 ```
 
 
@@ -831,7 +831,7 @@ The input of this function are a matrix `X` with $m$ rows and $n$ columns and a 
 ```{r}
 
 fast_kw <- apply(X, 1, function(row){kw_fast(row, grp)})
-fast_kw
+head(fast_kw, 50)
 ```
 
 ## f. 
