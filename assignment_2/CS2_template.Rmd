@@ -1,0 +1,342 @@
+---
+title: "Case Study 2"
+author: "First Name, Last Name"
+date: "2026-04-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+*The  .Rmd* **and** *.html (or .pdf) should be uploaded in TUWEL by the deadline. Refrain from using explanatory comments in the R code chunks but write them as text instead. Points will be deducted if the submitted file is not in a decent form.*
+
+**DISCLAIMER**: In case students did not contribute equally, include a disclaimer stating what each student's contribution was.
+
+
+The CIA World Factbook provides intelligence on various aspects of 266 world entities, including history, people, government, economy, energy, geography, environment, communications, transportation, military, terrorism, and transnational issues. This case study involves analyzing world data from 2020, focusing on:
+
+- **Education Expenditure (% of GDP)**
+- **Youth Unemployment Rate (15-24 years)**
+- **Net Migration Rate** (difference between the number of people entering and leaving a country per 1,000 persons)
+
+The data was sourced from the [CIA World Factbook Archives](https://www.cia.gov/the-world-factbook/about/archives/). You are required to use `dplyr` for data manipulation, while any package can be used for importing data.
+
+# Tasks:
+
+```{r}
+packages <- c("tidyverse", "countrycode")
+
+install_if_missing <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(install_if_missing)) install.packages(install_if_missing)
+
+
+library(tidyverse)
+library(readxl)
+library(countrycode)
+
+```
+## a. Data Import and Cleaning
+
+Load the following datasets from TUWEL and ensure that missing values are handled correctly and column names are clear. Each dataset should ultimately contain only two columns: **country** and the respective variable. Note that some data sets also contain information on the year when the value was last updated.
+
+  
+  * `rawdata_369.txt` which contains the (estimated)  public expenditure on education as a percent of GDP. *Pay attention! The delimiter is 2 or more white spaces (one space would not work as it would separate country names which contain a space); you have to skip the first two lines*. 
+  
+  * `rawdata_373.csv` which contains the (estimated) youth unemployment rate (15-24) per country
+  
+  * `rawdata_347.txt`  which contains (estimated) net migration rate per country.
+
+```{r}
+ed_exp_headers <- c("index", "ed_country_name", "ed_expenditure", "exp_year")
+mig_rate_headers <- c("index", "mig_country_name", "mig_rate", "mig_year")
+custom_countries <- c("Kosovo" = "Kosovo", 
+                     "Saint Martin" = "Saint Martin", 
+                     "Virgin Islands" = "Virgin Islands")
+
+ed_exp <- read_lines("rawdata_369.txt", skip = 2) %>% 
+  str_replace_all(" {2,}", "\t") %>% 
+  paste(collapse = "\n") %>% 
+  read_tsv(col_names = ed_exp_headers) %>%
+  mutate(country_name = countrycode(ed_country_name, origin = 'country.name', destination = 'country.name', custom_match = custom_countries)) %>%
+  select("country_name", "ed_expenditure")
+
+mig_rate <- read_lines("rawdata_347.txt", skip = 2) %>% 
+  str_replace_all(" {2,}", "\t") %>% 
+  paste(collapse = "\n") %>% 
+  read_tsv(col_names = mig_rate_headers) %>%
+  mutate(country_name = countrycode(mig_country_name, origin = 'country.name', destination = 'country.name', custom_match = custom_countries)) %>%
+  select("country_name", "mig_rate")
+
+
+unemployment <- read_csv("rawdata_373.csv", trim_ws = TRUE) %>%
+  mutate(country_name = countrycode(country_name, origin = 'country.name', destination = 'country.name', custom_match = custom_countries))
+
+```
+## b. Merging Raw Data
+
+Merge the datasets using `dplyr` on a unique key and retain the union of all observations.
+
+- What key are you using for merging? ISO3 codes, as there are often problems occouring when using just country names
+There is also a problem with the gaza strip as it is references as West Bank and Gaza Strip, 
+- Return the dimensions of the merged dataset. 227 rows, 7 columns
+
+```{r}
+ed_exp_final <- ed_exp %>%
+  group_by(country_name) %>%
+  summarise(ed_expenditure = mean(ed_expenditure, na.rm = TRUE), .groups = "drop")
+
+mig_rate_final <- mig_rate %>%
+  group_by(country_name) %>%
+  summarise(mig_rate = mean(mig_rate, na.rm = TRUE), .groups = "drop")
+
+unemployment_final <- unemployment %>%
+  group_by(country_name) %>%
+  summarise(youth_unempl_rate = mean(youth_unempl_rate, na.rm = TRUE), .groups = "drop")
+
+joined_df <- ed_exp_final %>%
+  full_join(mig_rate_final, by = "country_name") %>%
+  full_join(unemployment_final, by = "country_name")
+
+dup_df <- joined_df %>% 
+  filter(duplicated(country_name))
+dim(joined_df)
+```
+
+## c. Enriching Data with Income Classification
+
+Obtain country income classification (low, lower-middle, upper-middle, high) from the [World Bank](https://datahelpdesk.worldbank.org/knowledgebase/articles/906519) and merge it with the dataset.
+
+- Identify common variables between datasets. Can they be used for merging? Why or why not?
+The Economy column in the income dataset could be used for joining, but it also includes Regions so a left join is needed. We will use the iso code already added with the countrycode library.
+- Since ISO codes are standardized, download and use the [CIA country data codes](https://www.cia.gov/the-world-factbook/references/country-data-codes/) for merging. Make sure you are not losing any of the countries in your original data set when merging.
+
+```{r}
+income_class <- read_excel("CLASS_2025_10_07.xlsx") %>%
+  mutate(country_name = countrycode(Economy, origin = 'country.name', destination = 'country.name', custom_match = custom_countries)) %>%
+  select("country_name", "Income group") %>%
+  rename("income_group" = "Income group")
+
+
+iso_country <- read_csv("Country Data Codes.csv") %>%
+  select("Name", "Stanag") %>%
+  rename(country_name = Name, iso_code = Stanag) %>%
+  mutate(iso_code = case_match(country_name,
+      "Kosovo"       ~ "XKX",
+      "Saint Martin" ~ "SXM",
+      .default = iso_code), 
+      country_name = countrycode(country_name, origin = 'country.name', destination = 'country.name', custom_match = custom_countries))
+
+
+iso_df <- joined_df %>%
+   left_join(income_class, by = "country_name") %>%
+   left_join(iso_country, by = "country_name")
+
+```
+## d.  Adding Geographical Information
+
+Introduce continent and subcontinent (or region) data for each country.
+
+- Find and download an appropriate online resource.
+- Merge this information into the dataset, naming the final dataset `df_vars`. Make sure you are not losing any of the countries in your original data set when merging.
+
+```{r}
+
+
+#  https://www.kaggle.com/datasets/andradaolteanu/country-mapping-iso-continent-region/data
+continent_df <- read_csv("continents2.csv") %>%
+  select("alpha-3", "region", "sub-region")%>%
+  rename("iso_code" = "alpha-3", "continent" = "region", "region" = "sub-region")
+
+df_vars <- iso_df %>%
+  left_join(continent_df, by = "iso_code")
+```
+
+## e. Data Tidiness and Summary Statistics
+
+- Evaluate the tidiness of `df_vars`
+(observational units, variables, fixed vs. measured variables).
+Make adjustments to tidy the data, if necessary.
+
+- Create a frequency table for the income status variable and briefly interpret the results.
+
+- Analyze the distribution of income status across continents by computing absolute and relative frequencies. Comment on the findings.
+
+- Using the distribution of income status across continents, identify which countries are the only ones in their income group across the continent. Discuss briefly.
+
+
+```{r}
+glimpse(df_vars)
+df_vars %>% 
+  count(iso_code) %>% 
+  filter(n > 1)
+
+# Frequency Table
+income_freq <- df_vars %>%
+  count(income_group) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+print(income_freq)
+
+# Relative Frequency Table
+continent_income_dist <- df_vars %>%
+  group_by(continent, income_group) %>%
+  summarise(n = n(), .groups = "drop_last") %>%
+  mutate(rel_freq = n / sum(n) * 100)
+
+print(continent_income_dist)
+
+unique_income_countries <- df_vars %>%
+  group_by(continent, income_group) %>%
+  filter(n() == 1) %>%
+  select(continent, country_name, income_group)
+
+print(unique_income_countries)
+
+ggplot(df_vars, aes(x = income_group, fill = income_group)) +
+  geom_bar() +
+  facet_wrap(~ continent, scales = "free_y") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  labs(title = "Income Class by Continent",
+       x = "Income Class",
+       y = "Number of Countries")
+
+ggplot(df_vars, aes(x = continent, y = mig_rate, fill = continent)) +
+  geom_boxplot(outlier.color = "red", outlier.shape = 16) +
+  theme_minimal() +
+  labs(title = "Migration Rate by Continent")
+
+
+ggplot(df_vars, aes(x = continent, y = youth_unempl_rate, fill = continent)) +
+  geom_boxplot(outlier.color = "red", outlier.shape = 16) +
+  theme_minimal() +
+  labs(title = "Unemployment Rate by Continent")
+
+
+ggplot(df_vars, aes(x = continent, y = ed_expenditure, fill = continent)) +
+  geom_boxplot(outlier.color = "red", outlier.shape = 16) +
+  theme_minimal() +
+  labs(title = "Expenditure Rate by Continent")
+```
+
+
+## f. Further Summary Statistics and Insights
+
+- Create a table of average (mean and median) values for expenditure, youth unemployment rate and net migration rate separated into income status. Make sure that in the output, the ordering of the income classes is proper (i.e., L, LM, UM, H or the other way around). Briefly comment the results and any differences between the mean and median. 
+
+```{r}
+df_summary <- df_vars %>% 
+  group_by(income_group) %>% 
+  summarize(exp_mean = mean(ed_expenditure, na.rm = TRUE),
+            exp_median = median(ed_expenditure),
+            mig_mean = mean(mig_rate, na.rm = TRUE),
+            mig_median = median(mig_rate),
+            unempl_mean = mean(youth_unempl_rate, na.rm = TRUE),
+            unempl_median = median(youth_unempl_rate)) %>% 
+  mutate(income_group = factor(income_group, 
+                               levels = c("Low income", 
+                                          "Lower middle income", 
+                                          "Upper middle income", 
+                                          "High income"))) %>% 
+  arrange(income_group)
+
+
+```
+- Look at the standard deviation and the interquartile range of the variables per income status instead of the location statistics above. Do you gain additional insights? Briefly comment the results. 
+```{r}
+df_sd <- df_vars %>% 
+  group_by(income_group) %>% 
+  summarize(exp_sd = sd(ed_expenditure, na.rm = TRUE),
+            exp_iqr = IQR(ed_expenditure, na.rm = TRUE),
+            mig_sd = sd(mig_rate, na.rm = TRUE),
+            mig_iqr = IQR(mig_rate, na.rm = TRUE),
+            unempl_sd= sd(youth_unempl_rate, na.rm = TRUE),
+            unempl_iqr = IQR(youth_unempl_rate, na.rm = TRUE)
+            )
+```
+
+- Extend the analysis of the statistics median and IQR  to **each income status and continent combination**. Play around with displaying the resulting table. Use `pivot_longer()` and/or 
+`pivot_wider()` to generate different outputs. 
+Discuss the results as well as the readability of the different tables.
+
+```{r}
+df_sd_contintent <- df_vars %>% 
+  group_by(income_group, continent) %>% 
+  summarize(exp_sd = sd(ed_expenditure, na.rm = TRUE),
+            exp_iqr = IQR(ed_expenditure, na.rm = TRUE),
+            mig_sd = sd(mig_rate, na.rm = TRUE),
+            mig_iqr = IQR(mig_rate, na.rm = TRUE),
+            unempl_sd= sd(youth_unempl_rate, na.rm = TRUE),
+            unempl_iqr = IQR(youth_unempl_rate, na.rm = TRUE)
+            )
+
+df_sd_long <- df_sd_contintent %>%
+  pivot_longer(
+    cols = exp_sd:unempl_iqr, 
+    values_to = "value"
+  )
+df_sd_wide <- df_sd_contintent %>%
+  pivot_wider(
+    names_from = continent, 
+    values_from = exp_sd:unempl_iqr
+  )
+```
+ 
+- Identify countries performing well in terms of both **youth unemployment** and **net migration rate** (top 25% in net migration and bottom 25% in youth unemployment within their continent).
+
+```{r}
+df_performing <- df_vars %>% 
+  group_by(continent) %>% 
+  mutate( mig_quant = quantile(mig_rate, probs = 0.75, na.rm = TRUE),
+            unempl_quant= quantile(youth_unempl_rate, probs=0.25, na.rm = TRUE)) %>% 
+  filter(mig_rate >= mig_quant & youth_unempl_rate <= unempl_quant) %>% 
+  ungroup()
+            
+```
+
+## g. Conditional Probabilities
+
+Estimate the following based on the observed frequencies in the data:
+
+- What is the (posterior or conditional) probability that a European country belongs to the high income group? What is the prior probability that a country belongs to the high income group?
+
+```{r}
+prob_overall<- df_vars %>%
+  summarize(conditional_prob = mean(income_group == "High income", na.rm = TRUE))
+print(prob_overall)
+
+prob_europe <- df_vars %>%
+  filter(continent == "Europe") %>%
+  summarize(conditional_prob = mean(income_group == "High income", na.rm = TRUE))
+
+print(prob_europe)
+
+
+
+```
+
+
+- Given a country has high youth unemployment (above %25), what is the probability that it also has negative net migration?
+```{r}  
+prob_neg_mig <- df_vars %>%
+  filter(youth_unempl_rate > 25) %>%
+  summarize(prob = mean(mig_rate < 0, na.rm = TRUE))
+
+print(prob_neg_mig)
+```
+
+
+
+## h. Simpson’s Paradox Analysis
+
+Investigate whether an overall trend in youth unemployment rate in the high and low income groups reverses when analyzed at the continent level. E.g., does the youth unemployment rate appear lower in low-income countries overall, but higher when controlling for continent? Explain the results and possible reasons behind this paradox.
+```{r}
+
+
+```
+
+
+## i. Data Export
+
+Export the final tidy dataset from e. as a **CSV** with:`;` as a separator; `.` representing missing values; no row names included.  Upload the `.csv` to TUWEL, together with the submission.
+
